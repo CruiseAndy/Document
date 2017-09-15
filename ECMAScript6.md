@@ -1921,6 +1921,416 @@ it.next();
 
 ---
 
+## Class
+
+### 1. constructor method
+
+constructor方法是类的默认方法，通过new命令生成对象实例时，自动调用该方法。一个类必须有constructor方法，如果没有显式定义，一个空的constructor方法会被默认添加。
+```javascript=
+class Point {
+}
+
+// 等同于
+class Point {
+  constructor() {}
+}
+```
+
+下面代码使用表达式定义了一个类。需要注意的是，这个类的名字是MyClass而不是Me，Me只在 Class 的内部代码可用，指代当前类。
+```javascript=
+const MyClass = class Me {
+  getClassName() {
+    return Me.name;
+  }
+};
+```
+
+### 2. getter & setter
+
+与 ES5 一样，在“类”的内部可以使用get和set关键字，对某个属性设置存值函数和取值函数，拦截该属性的存取行为。
+```javascript=
+class MyClass {
+  constructor() {
+    // ...
+  }
+  get prop() {
+    return 'getter';
+  }
+  set prop(value) {
+    console.log('setter: '+value);
+  }
+}
+
+let inst = new MyClass();
+
+inst.prop = 123;
+// setter: 123
+
+inst.prop
+// 'getter'
+```
+
+### 3. generator method of class
+
+如果某个方法之前加上星号（*），就表示该方法是一个 Generator 函数。
+```javascript=
+class Foo {
+  constructor(...args) {
+    this.args = args;
+  }
+  * [Symbol.iterator]() {
+    for (let arg of this.args) {
+      yield arg;
+    }
+  }
+}
+
+for (let x of new Foo('hello', 'world')) {
+  console.log(x);
+}
+// hello
+// world
+```
+
+### 4. class靜態方法
+
+类相当于实例的原型，所有在类中定义的方法，都会被实例继承。如果在一个方法前，加上static关键字，就表示该方法不会被实例继承，而是直接通过类来调用，这就称为“静态方法”。
+```javascript=
+class Foo {
+  static classMethod() {
+    return 'hello';
+  }
+}
+
+Foo.classMethod() // 'hello'
+
+var foo = new Foo();
+foo.classMethod()
+// TypeError: foo.classMethod is not a function
+```
+
+注意，如果静态方法包含this关键字，这个this指的是类，而不是实例。
+```javascript=
+class Foo {
+  static bar () {
+    this.baz();
+  }
+  static baz () {
+    console.log('hello');
+  }
+  baz () {
+    console.log('world');
+  }
+}
+
+Foo.bar() // hello
+```
+
+父类的静态方法，可以被子类继承。
+```javascript=
+class Foo {
+  static classMethod() {
+    return 'hello';
+  }
+}
+
+class Bar extends Foo {
+}
+
+Bar.classMethod() // 'hello'
+```
+
+静态方法也是可以从super对象上调用的。
+```javascript=
+class Foo {
+  static classMethod() {
+    return 'hello';
+  }
+}
+
+class Bar extends Foo {
+  static classMethod() {
+    return super.classMethod() + ', too';
+  }
+}
+
+Bar.classMethod() // "hello, too"
+```
+
+在子类的构造函数中，只有调用super之后，才可以使用this关键字，否则会报错。这是因为子类实例的构建，是基于对父类实例加工，只有super方法才能返回父类实例。
+```javascript=
+class Point {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+class ColorPoint extends Point {
+  constructor(x, y, color) {
+    this.color = color; // ReferenceError
+    super(x, y);
+    this.color = color; // 正确
+  }
+}
+```
+
+### 5. Super
+
+super这个关键字，既可以当作函数使用，也可以当作对象使用。在这两种情况下，它的用法完全不同。
+
+* 第一种情况，super作为函数调用时，代表父类的构造函数。ES6 要求，子类的构造函数必须执行一次super函数。
+```javascript=
+class A {
+  constructor() {
+    console.log(new.target.name);
+  }
+}
+class B extends A {
+  constructor() {
+    super();
+  }
+}
+new A() // A
+new B() // B
+```
+
+第二种情况，super作为对象时，在普通方法中，指向父类的原型对象；在静态方法中，指向父类。
+下面代码中，子类B当中的super.p()，就是将super当作一个对象使用。这时，super在普通方法之中，指向A.prototype，所以super.p()就相当于A.prototype.p()。
+```javascript=
+class A {
+  p() {
+    return 2;
+  }
+}
+
+class B extends A {
+  constructor() {
+    super();
+    console.log(super.p()); // 2
+  }
+}
+
+let b = new B();
+```
+
+这里需要注意，由于super指向父类的原型对象，所以定义在父类实例上的方法或属性，是无法通过super调用的。
+```javascript=
+class A {
+  constructor() {
+    this.p = 2;
+  }
+}
+
+class B extends A {
+  get m() {
+    return super.p;
+  }
+}
+
+let b = new B();
+b.m // undefined
+```
+
+由于绑定子类的this，所以如果通过super对某个属性赋值，这时super就是this，赋值的属性会变成子类实例的属性。
+```javascript=
+class A {
+  constructor() {
+    this.x = 1;
+  }
+}
+
+class B extends A {
+  constructor() {
+    super();
+    this.x = 2;
+    super.x = 3;
+    console.log(super.x); // undefined
+    console.log(this.x); // 3
+  }
+}
+
+let b = new B();
+```
+
+如果super作为对象，用在静态方法之中，这时super将指向父类，而不是父类的原型对象。
+```javascript=
+class Parent {
+  static myMethod(msg) {
+    console.log('static', msg);
+  }
+
+  myMethod(msg) {
+    console.log('instance', msg);
+  }
+}
+
+class Child extends Parent {
+  static myMethod(msg) {
+    super.myMethod(msg);
+  }
+
+  myMethod(msg) {
+    super.myMethod(msg);
+  }
+}
+
+Child.myMethod(1); // static 1
+
+var child = new Child();
+child.myMethod(2); // instance 2
+```
+
+注意，使用super的时候，必须显式指定是作为函数、还是作为对象使用，否则会报错。
+```javascript=
+class A {}
+
+class B extends A {
+  constructor() {
+    super();
+    console.log(super); // 报错
+  }
+}
+```
+
+---
+
+## Module
+
+ES6 模块不是对象，而是通过export命令显式指定输出的代码，再通过import命令输入。
+```javascript=
+// ES6模块
+import { stat, exists, readFile } from 'fs';
+```
+
+### 1. export
+
+export命令除了输出变量，还可以输出函数或类（class）。
+```javascript=
+export function multiply(x, y) {
+  return x * y;
+};
+```
+
+通常情况下，export输出的变量就是本来的名字，但是可以使用as关键字重命名。
+```javascript=
+function v1() { ... }
+function v2() { ... }
+
+export {
+  v1 as streamV1,
+  v2 as streamV2,
+  v2 as streamLatestVersion
+};
+```
+
+需要特别注意的是，export命令规定的是对外的接口，必须与模块内部的变量建立一一对应关系。
+```javascript=
+// 写法一
+export var m = 1;
+
+// 写法二
+var m = 1;
+export {m};
+
+// 写法三
+var n = 1;
+export {n as m};
+```
+
+### 2. import
+
+如果想为输入的变量重新取一个名字，import命令要使用as关键字，将输入的变量重命名。
+```javascript=
+import { lastName as surname } from './profile';
+```
+
+注意，import命令具有提升效果，会提升到整个模块的头部，首先执行。
+```javascript=
+foo();
+
+import { foo } from 'my_module';
+```
+
+### 3. module 整體加載
+
+整体加载的写法如下。
+```javascript=
+import * as circle from './circle';
+
+console.log('圆面积：' + circle.area(4));
+console.log('圆周长：' + circle.circumference(14));
+```
+
+### 4. export default
+
+为了给用户提供方便，让他们不用阅读文档就能加载模块，就要用到export default命令，为模块指定默认输出。
+```javascript=
+// export-default.js
+export default function () {
+  console.log('foo');
+}
+```
+
+其他模块加载该模块时，import命令可以为该匿名函数指定任意名字。
+```javascript=
+// import-default.js
+import customName from './export-default';
+customName(); // 'foo'
+```
+
+export default命令用在非匿名函数前，也是可以的。
+```javascript=
+// export-default.js
+export default function foo() {
+  console.log('foo');
+}
+
+// 或者写成
+
+function foo() {
+  console.log('foo');
+}
+
+export default foo;
+```
+
+本质上，export default就是输出一个叫做default的变量或方法，然后系统允许你为它取任意名字。所以，下面的写法是有效的。
+```javascript=
+// modules.js
+function add(x, y) {
+  return x * y;
+}
+export {add as default};
+// 等同于
+// export default add;
+
+// app.js
+import { default as xxx } from 'modules';
+// 等同于
+// import xxx from 'modules';
+```
+
+如果想在一条import语句中，同时输入默认方法和其他接口，可以写成下面这样。
+```javascript=
+import _, { each, each as forEach } from 'lodash';
+```
+
+对应上面代码的export语句如下。
+```javascript=
+export default function (obj) {
+  // ···
+}
+
+export function each(obj, iterator, context) {
+  // ···
+}
+
+export { each as forEach };
+```
+
+---
+
 ### ES6 声明变量的六种方法
 ES5 只有两种声明变量的方法：var命令和function命令。ES6除了添加let和const命令，后面章节还会提到，另外两种声明变量的方法：import命令和class命令。所以，ES6 一共有6种声明变量的方法。
 
